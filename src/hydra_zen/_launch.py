@@ -3,11 +3,13 @@
 import warnings
 from collections import UserList
 from collections.abc import Mapping
+from contextlib import nullcontext
 from dataclasses import fields, is_dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    ContextManager,
     Generic,
     Optional,
     TypeVar,
@@ -26,8 +28,37 @@ from hydra.types import HydraContext, RunMode
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from typing_extensions import Literal, TypeAlias
 
+from hydra_zen._compatibility import HYDRA_ENFORCES_TARGET_POLICY
 from hydra_zen._hydra_overloads import instantiate
 from hydra_zen.typing._implementations import DataClass_, InstOrType
+
+if HYDRA_ENFORCES_TARGET_POLICY:  # pragma: no cover
+    from hydra._internal.target_policy import _trusted_internal_target
+
+    def _trusted_sweeper_target(sweeper_cfg: Any) -> ContextManager[None]:
+        """Claim Hydra's own internal-target exemption for the sweeper.
+
+        Hydra applies this to every plugin it instantiates through
+        `Plugins.instantiate_*`; `launch` instantiates the sweeper directly, so
+        it claims the exemption directly. Scoped to the one target named by the
+        config, and released immediately afterwards.
+        """
+        # Read defensively: this is only ever a DictConfig in `launch`, but a
+        # helper that raises on a plain mapping would turn a missing key into a
+        # confusing failure far from its cause.
+        target = getattr(sweeper_cfg, "_target_", None)
+        if target is None and isinstance(sweeper_cfg, Mapping):
+            target = sweeper_cfg.get("_target_")
+        if not isinstance(target, str):  # nothing to trust
+            return nullcontext()
+        return _trusted_internal_target(target)
+
+else:
+
+    def _trusted_sweeper_target(sweeper_cfg: Any) -> ContextManager[None]:
+        """No target policy before Hydra 1.3.7 -- nothing to claim."""
+        return nullcontext()
+
 
 T = TypeVar("T", bound=Any)
 HydraPrimitives: TypeAlias = Union[None, int, float, bool, str, dict[str, str]]
@@ -459,7 +490,14 @@ def launch(
             _ = job.return_value
         else:
             # Instantiate sweeper without using Hydra's Plugin discovery (Zen!)
-            sweeper = instantiate(cfg.hydra.sweeper)
+            #
+            # Hydra >= 1.3.7 refuses `hydra._internal.*` targets named by
+            # declarative config; it exempts its own plugins by instantiating
+            # them inside `_trusted_internal_target`. Bypassing discovery means
+            # we must claim that same exemption, for this target only, or the
+            # stock `hydra/sweeper=basic` is rejected and every multirun fails.
+            with _trusted_sweeper_target(cfg.hydra.sweeper):
+                sweeper = instantiate(cfg.hydra.sweeper)
             assert isinstance(sweeper, Sweeper)
             sweeper.setup(
                 config=cfg,

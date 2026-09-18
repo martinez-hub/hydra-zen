@@ -8,6 +8,14 @@ Changelog
 This is a record of all past hydra-zen releases and what went into them, in reverse
 chronological order. All previous releases should still be available on pip.
 
+.. _v0.16.1:
+
+-------------------
+0.16.1 - unreleased
+-------------------
+
+- Fixes ``launch(..., multirun=True)`` raising ``InstantiationException`` on hydra-core 1.3.7. 1.3.7 refuses to instantiate ``hydra._internal.*`` targets named by declarative config; Hydra exempts its own plugins when it instantiates them, and ``launch`` -- which deliberately bypasses plugin discovery -- now claims that same exemption for the sweeper target it names.
+
 .. _v0.16.0:
 
 -------------------
