@@ -14,7 +14,12 @@ chronological order. All previous releases should still be available on pip.
 0.16.1 - unreleased
 -------------------
 
-- Fixes ``launch(..., multirun=True)`` raising ``InstantiationException`` on hydra-core 1.3.7. 1.3.7 refuses to instantiate ``hydra._internal.*`` targets named by declarative config; Hydra exempts its own plugins when it instantiates them, and ``launch`` -- which deliberately bypasses plugin discovery -- now claims that same exemption for the sweeper target it names.
+- Fixes ``launch(..., multirun=True)`` raising ``InstantiationException`` on hydra-core 1.3.7, which refuses to instantiate ``hydra._internal.*`` targets named by declarative config -- including the stock ``hydra/sweeper=basic``. ``launch`` now constructs the sweeper through Hydra's plugin registry (``Plugins.instantiate_sweeper``), the supported path, instead of instantiating the sweeper config directly. See :pull:`885`.
+
+  This changes what ``launch`` accepts as a sweeper, bringing it in line with the Hydra CLI:
+
+  - A custom sweeper must be a Hydra plugin: its class must be defined under the ``hydra_plugins`` namespace package, and the sweeper config's ``_target_`` must name that class directly. Sweepers defined elsewhere are no longer accepted, even if their config is in the ``ConfigStore``. Because ``zen_meta`` and ``zen_wrappers`` route a config's ``_target_`` through ``hydra_zen.funcs.zen_processing``, they cannot be used on the sweeper config itself; ``launch`` raises a ``HydraZenValidationError`` saying so.
+  - Hydra builds its plugin registry once per process, on first use. A ``hydra_plugins`` package must therefore be importable before the first ``launch`` (or any other Hydra initialization) in the process. One added to ``sys.path`` afterwards is never scanned: its config is missing (``Could not find hydra/sweeper/<name>``), or, if its module was imported by hand, its class is reported as ``Unknown plugin class``.
 
 .. _v0.16.0:
 

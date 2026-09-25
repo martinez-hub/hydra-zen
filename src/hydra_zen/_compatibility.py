@@ -76,13 +76,6 @@ ZEN_SUPPORTED_PRIMITIVES: frozenset[type] = frozenset(
 
 HYDRA_SUPPORTS_OBJECT_CONVERT = HYDRA_VERSION >= Version(1, 3, 0)
 
-# Hydra 1.3.7 added a target policy that refuses to instantiate any
-# `hydra._internal.*` target named by declarative config. Hydra exempts its own
-# plugins by instantiating them inside `_trusted_internal_target`, so
-# `launch`'s direct `instantiate(cfg.hydra.sweeper)` -- which deliberately
-# bypasses plugin discovery -- is rejected for the stock sweeper.
-HYDRA_ENFORCES_TARGET_POLICY = HYDRA_VERSION >= Version(1, 3, 7)
-
 # OmegaConf 2.4.0 (PR #1296) teaches its yaml loader to construct
 # pathlib._local.* paths (which Python 3.13 emits for pathlib.Path et al.).
 # On older OmegaConf we monkey-patch those constructors in ourselves.
